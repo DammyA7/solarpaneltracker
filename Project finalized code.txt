@@ -1,0 +1,153 @@
+  #include <Servo.h>//call servo library
+Servo WestEast;//bottom motor
+Servo NorthSouth;//initialising 2 servo motors - top motor
+int leftTop = A0, rightTop = A1, leftBot = A2, rightBot = A3, solarPanel = A4, solarPanel1 = A5;//initialise solar panels andl ldrs
+int value0, value1, value2, value3, avgTop, avgBot, avgLeft, avgRight, pos = 0, posNS = 0, LED = 2, LED1 = 10, LED2 = 11, LED3 = 12, Button = 13, buttonState = 0, i;
+double value4, value5, value6, value7 = 2046, value8 = 12.8;//initialise values being read in and operated on
+
+void setup(){
+  Serial.begin(9600);
+  pinMode(Button, INPUT);//defines functions of components
+  pinMode(LED, OUTPUT);
+  pinMode(LED1, OUTPUT);
+  pinMode(LED2, OUTPUT);
+  pinMode(LED3, OUTPUT);
+  WestEast.attach(7);
+  NorthSouth.attach(6);//attached to specified ports on arduino
+}
+
+void loop() {
+  continuoustrackingSystem();// button high - LIGHT GREEN
+  
+  automatictrackingSystem();// button low - DARK GREEN
+}
+
+//method 1
+void continuoustrackingSystem(){//method allows panels to flow light continuously 
+  buttonState = digitalRead(Button);//reads button state
+  digitalWrite(LED, LOW);//RED
+  digitalWrite(LED1, HIGH);//LIGHT GREEN
+  digitalWrite(LED2, LOW);//YELLOW
+  digitalWrite(LED3  , LOW);//DARK GREEN - turns on or off LEDs
+  while(buttonState == HIGH){//true of button is on
+    calculations();//reads in the values of the LDRs/Solar and calculates the average of each side and sum solar panel readings
+    if(abs(avgLeft - avgRight) < 10 && abs(avgTop - avgBot) < 10){//tolerance set to avoid unnecessary movement
+      //do nothing
+    }
+    else{
+      conditions();//controls movement of motors
+   }
+  //printValues();//displays LDR resistance values and solar panel reading (delays the movement!!!)
+  buttonState = digitalRead(Button);//check button state before looping over while loop - directed to previous while loop
+  delay(25);//reduces speed of motor movement by waiting 25mS before rechecking while loop
+   }
+}
+
+//method 2
+void automatictrackingSystem(){//imitates real world tracking system - button off
+  buttonState = digitalRead(Button);//reads button state
+  digitalWrite(LED, LOW);//RED
+  digitalWrite(LED1, LOW);//LIGHT GREEN
+  digitalWrite(LED2, LOW);//YELLOW
+  digitalWrite(LED3  , HIGH);//DARK GREEN - turns on or off LEDs
+  while(buttonState == LOW){//true of button is off
+    calculations();//reads in the values of the LDRs/Solar and calculates the average of each side and sum solar panel readings
+    if(abs(avgLeft - avgRight) < 25 && abs(avgTop - avgBot) < 25){//tolerance set to show panels are receiving as much ligt as possible
+      i++;//used a counter to ensure the state is constant - a timer 
+      if(i == 100){//to prevent led from flickering when conditions
+        digitalWrite(LED2, HIGH);//YELLOW//turns on LED to indicate steady state might have been found
+      }
+      
+      if(i == 500){//if state is held for 500 counts reset counter and break out of while loop for steady state
+        i = 0;
+        break;
+      }
+    }
+    else{
+      digitalWrite(LED2, LOW);//YELLOW - if not steady from 100 - 500 iterations, turn off LED
+      i = 0;//reset counter
+      conditions();//controls movement of motors
+    }
+    //printValues();//displays LDR resistance values and solar panel reading (delays the movement!!!)
+    buttonState = digitalRead(Button);//check button state before looping over while loop - directed to previous while loop 
+    delay(15);//reduces speed of motor movement by waiting 15mS before rechecking while loop
+   }
+   while(buttonState == LOW){//if button off and and i == 500 turn on red lED for timer as system is idle
+    digitalWrite(LED, HIGH);//RED
+    digitalWrite(LED2, LOW);//YELLOW//turns off yellow LED from previous while loop
+    if (i != 30000){
+      i++;//timer function for steady state before resuming checking process
+      delay(1);
+    }
+    else{
+      i = 0;//resets counter after the 60second timer
+      break;//breaks out of while loop
+    }
+    
+    buttonState = digitalRead(Button);//check button state before looping over while loop - directed to previous while loop
+   }
+  }
+   
+
+// CONDITIONS
+void conditions(){
+    if(avgLeft > avgRight && avgTop > avgBot){//moves in north-west direction
+      WestEast.write(WestEast.read() - 1);
+      NorthSouth.write(NorthSouth.read() - 1);
+    }
+    else if(avgLeft < avgRight && avgTop < avgBot && NorthSouth.read() != 135){//moves in south-east and prevent northsouth from overshooting
+      WestEast.write(WestEast.read() + 1);
+      NorthSouth.write(NorthSouth.read() + 1);
+    }
+    else if(avgLeft < avgRight && avgTop > avgBot){//moves north-east
+      WestEast.write(WestEast.read() + 1);
+      NorthSouth.write(NorthSouth.read() - 1);
+    }
+    else if(avgLeft > avgRight && avgTop < avgBot && NorthSouth.read() != 135){//moves South-west and prevents motor from overshooting
+      WestEast.write(WestEast.read() - 1);
+      NorthSouth.write(NorthSouth.read() + 1);
+    }
+    else if(avgLeft > avgRight){//moves east
+      WestEast.write(WestEast.read() + 1);
+    }
+    else if(avgLeft < avgRight){//moves west
+      WestEast.write(WestEast.read() - 1);
+    }
+    else if(avgTop > avgBot && NorthSouth.read() != 135){//moves south and prevents motor from overshooting
+      NorthSouth.write(NorthSouth.read() + 1);
+    }
+    else if(avgTop < avgBot){//moves North
+      NorthSouth.write(NorthSouth.read() - 1);
+    }
+}
+
+//CALCULATIONS
+void calculations(){//reads in each LDR and calculates each average for each side
+  value0 = analogRead(leftTop);
+  value1 = analogRead(rightTop);
+  value2 = analogRead(leftBot);
+  value3 = analogRead(rightBot);
+  avgTop = (value0 + value1) / 2;
+  avgBot = (value2 + value3) / 2;
+  avgLeft = (value0 + value2) / 2;
+  avgRight = (value1 + value3) / 2;
+
+//solar panel calculations
+  value4 = analogRead(solarPanel);//reads panel values and converts it to voltage values
+  value5 = analogRead(solarPanel1);
+  value6 = ((value4 + value5) / value7) * value8;
+}
+
+//PRINT
+void printValues(){//prints value of each LDR and combined solar panels
+  Serial.print("Left Top: ");
+  Serial.print(value0);
+  Serial.print("  Right Top: ");
+  Serial.print(value1);
+  Serial.print("  Left Bot: ");
+  Serial.print(value2);
+  Serial.print("  Right Bot: ");
+  Serial.print(value3);
+  Serial.print("     Solar reading: ");
+  Serial.println(value6);
+}
